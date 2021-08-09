@@ -1,34 +1,68 @@
-import { TypeVariable } from "typescript";
-import { Term, Type, HoleId, VariableId, TypeVariableId } from "./language/Syntax";
-import { infer, Inference, Context, isSubtype } from "./Typing";
+import { Term, Type, HoleId, VariableId, TypeVariableId, termToString, typeToString, variableIdToString } from "./language/Syntax";
+import { infer, Inference, Context, isSubtype, contextToString } from "./Typing";
 
-type State = {
+export type State = {
   term: Term;
   type: Type;
   focus: Focus | undefined;
 };
 
-type Focus = {
-  id:  HoleId;
+export type Focus = {
+  id: HoleId;
   type: Type;
   context: Context;
   transitions: Transition[]; 
 }
 
-type Transition
+export type Transition
   = { case: "select"; id: HoleId; }
   | { case: "put"; put: Put }
 ;
 
-type Put
+export type Put
   = { case: "unit" }
   | { case: "variable"; id: VariableId }
   | { case: "abstraction"; domain: Type; id: VariableId }
   | { case: "application" }
 
+export function stateToString(state: State): string {
+  return `term: ${termToString(state.term)}; type: ${typeToString(state.type)}; focus: ${focusToString(state.focus)}`;
+}
+
+export function focusToString(focus: Focus | undefined): string {
+  if (focus !== undefined) {
+    return `id: ${focus.id}; type: ${typeToString(focus.type)}; context: ${contextToString(focus.context)}; transitions: ${focus.transitions.map(t => transitionToString(t))}`;
+  } else 
+    return "unfocussed"
+}
+
+export function transitionToString(transition: Transition): string {
+  switch (transition.case) {
+    case "select": {
+      return `select hole id ${transition.id}`;
+    }
+    case "put": {
+      return `put ${putToString(transition.put)}`;
+    }
+  }
+}
+
+export function putToString(put: Put): string {
+  switch (put.case) {
+    case "unit": return `unit`;
+    case "variable": return variableIdToString(put.id);
+    case "abstraction": return `(${variableIdToString(put.id)}: ${typeToString(put.domain)}) ⇒ ?`;
+    case "application": return `? ?`;
+  }
+}
+
 // Update
 
 export function update(state: State, transition: Transition): State {
+  console.log(`update`);
+  console.log(`input state: ${stateToString(state)}`);
+  console.log(`transition: ${transitionToString(transition)}`);
+
   switch (transition.case) {
     case "select": {
       let inference: Inference = infer(state.term);
@@ -41,7 +75,6 @@ export function update(state: State, transition: Transition): State {
       // produce fresh type/term variable ids
       let freshVariableId: VariableId = inference.maxVariableId + 1;
       let freshTypeVariableId: TypeVariableId = inference.maxTypeVariableId + 1;
-      let freshHoleId: HoleId = inference.maxHoleId + 1;
 
       // basic constructors
       switch (holeType.case) {
@@ -65,7 +98,7 @@ export function update(state: State, transition: Transition): State {
 
       // variable constructors
       holeContext.forEach((type, id) => {
-        if (isSubtype(holeContext, type, holeType)) {
+        if (isSubtype(state.term, type, holeType)) {
           transitions.push({ case: "put", put: { case: "variable", id } });
         }
       });
@@ -76,16 +109,13 @@ export function update(state: State, transition: Transition): State {
       });
 
       // new state
-      return {
-        term: state.term,
-        type: state.type,
-        focus: {
-          id:  transition.id,
-          type: holeType,
-          context: holeContext,
-          transitions
-        }
+      state.focus = {
+        id: transition.id,
+        type: holeType,
+        context: holeContext,
+        transitions
       };
+      break;
     }
     
     case "put": {
@@ -123,16 +153,16 @@ export function update(state: State, transition: Transition): State {
       if (term !== undefined) {
         let inference = infer(term);
         // new state
-        return {
-          term: term,
-          type: inference.type,
-          focus: undefined // unfocus
-        }  
+        state.term = term;
+        state.type = inference.type;
+        state.focus = undefined;
       } else {
         throw new Error("impossible");
       }
     }
   }
+  console.log(`output state: ${stateToString(state)}`);
+  return state;
 }
 
 // Holes
