@@ -1,5 +1,6 @@
-import { Term, Type, HoleId, VariableId, TypeVariableId, termToString, typeToString, variableIdToString } from "./language/Syntax";
-import { infer, Inference, Context, isSubtype, contextToString } from "./Typing";
+import { toArray } from "./data/List";
+import { HoleId, holeIdToString, Term, termToString, Type, typeToString, VariableId, variableIdToString } from "./language/Syntax";
+import { collectHoleContexts, Context, contextToString, infer, Inference, extractHoleType } from "./Typing";
 
 export type State = {
   term: Term;
@@ -22,7 +23,7 @@ export type Transition
 export type Put
   = { case: "unit" }
   | { case: "variable"; id: VariableId }
-  | { case: "abstraction"; domain: Type; id: VariableId }
+  | { case: "abstraction" }
   | { case: "application" }
 
 export function stateToString(state: State): string {
@@ -31,7 +32,7 @@ export function stateToString(state: State): string {
 
 export function focusToString(focus: Focus | undefined): string {
   if (focus !== undefined) {
-    return `id: ${focus.id}; type: ${typeToString(focus.type)}; context: ${contextToString(focus.context)}; transitions: ${focus.transitions.map(t => transitionToString(t))}`;
+    return `id: ${focus.id}; type: ${typeToString(focus.type)}; context: ${contextToString(focus.context)}; transitions: ${focus.transitions.map(t => transitionToString(t)).join(", ")}`;
   } else 
     return "unfocussed"
 }
@@ -51,7 +52,7 @@ export function putToString(put: Put): string {
   switch (put.case) {
     case "unit": return `unit`;
     case "variable": return variableIdToString(put.id);
-    case "abstraction": return `(${variableIdToString(put.id)}: ${typeToString(put.domain)}) ⇒ ?`;
+    case "abstraction": return `λ ?`;
     case "application": return `? ?`;
   }
 }
@@ -65,133 +66,127 @@ export function update(state: State, transition: Transition): State {
 
   switch (transition.case) {
     case "select": {
+      // Infer hole type and context
       let inference: Inference = infer(state.term);
-      let holeContext = inference.holeContexts.get(transition.id) as Context;
-      let holeType = inference.holeTypes.get(transition.id) as Type;
-
-      // calculate available transitions from state focussed on this hole
-      let transitions: Transition[] = [];
-
-      // produce fresh type/term variable ids
-      let freshVariableId: VariableId = inference.maxVariableId + 1;
-      let freshTypeVariableId: TypeVariableId = inference.maxTypeVariableId + 1;
-
-      // basic constructors
-      switch (holeType.case) {
-        case "unit": {
-          transitions.push({ case: "put", put: {case: "unit"} });
-          transitions.push({ case: "put", put: {case: "application"} });
-          break;
-        }
-        case "arrow": {
-          transitions.push({ case: "put", put: {case: "abstraction", domain: holeType.domain, id: freshVariableId}});
-          transitions.push({ case: "put", put: {case: "application"}});
-          break;
-        }
-        case "variable": {
-          transitions.push({ case: "put", put: {case: "unit"}});
-          transitions.push({ case: "put", put: {case: "abstraction", domain: {case: "variable", id: freshTypeVariableId}, id: freshVariableId}});
-          transitions.push({ case: "put", put: {case: "application" } });
-          break;
+      let holeType: Type = extractHoleType(inference.termAnn, transition.id);
+      let holeContexts: Map<HoleId, Context> = collectHoleContexts(inference.termAnn);
+      {
+        let arr: string[] = [];
+        holeContexts.forEach((context, id) => arr.push(`${holeIdToString(id)}: ${contextToString(context)}`));
+        console.log(`holeContexts: ${arr.join("; ")}`);
+      }
+      let holeContext: Context;
+      {
+        let res = holeContexts.get(transition.id);
+        if (res !== undefined)
+          holeContext = res;
+        else {
+          throw new Error(`hole id ${transition.id} not found among hole contexts`);
         }
       }
+      console.log(`holeContext: ${contextToString(holeContext)}`);
 
-      // variable constructors
-      holeContext.forEach((type, id) => {
-        if (isSubtype(state.term, type, holeType)) {
-          transitions.push({ case: "put", put: { case: "variable", id } });
+      // Collect transitions
+      let transitions: Transition[] = [];
+      let putOptions: Put[] = [];
+      // Basic constructors
+      putOptions.push({case: "unit"});
+      putOptions.push({case: "application"});
+      putOptions.push({case: "abstraction"});
+      // Variable constructors
+      toArray(holeContext).forEach((type, id) =>
+        putOptions.push({case: "variable", id})
+      );
+      putOptions.forEach(put => {
+        let fillTerm: Term;
+        switch (put.case) {
+          case "unit": fillTerm = {case: "unit"}; break;
+          case "variable": fillTerm = {case: "variable", id: put.id}; break;
+          case "abstraction": fillTerm = {case: "abstraction", body: {case: "hole", id: -1}}; break;
+          case "application": fillTerm = {case: "application", applicant: {case: "hole", id: -1}, argument: {case: "hole", id: -1}}; break;
+        }
+        console.log(`trying to fillHole ${termToString(state.term)}`);
+        let term: Term = fillHole(state.term, transition.id, fillTerm);
+        console.log(`trying to enumerate ${termToString(term)}`);
+        term = enumerateHoles(term);
+        try {
+          console.log(`trying to infer ${termToString(term)}`);
+          infer(term);
+          console.log(`success for ${termToString(term)}`);
+          // if succeeds, then add
+          transitions.push({case: "put", put});
+        } catch (e) {
+          console.log(`${putToString(put)} is an invalid "put" option because: ${e}`);
+          // pass
         }
       });
 
-      // hole selections
-      getHoleIds(state.term).forEach(id => {
-        transitions.push({ case: "select", id });
-      });
-
-      // new state
-      state.focus = {
-        id: transition.id,
-        type: holeType,
-        context: holeContext,
-        transitions
+      // New state
+      return {
+        term: state.term,
+        type: inference.type,
+        focus: {
+          id: transition.id,
+          type: holeType,
+          context: holeContext,
+          transitions
+        }
       };
-      break;
     }
-    
     case "put": {
       // must have focus in order to "put"
       let focus: Focus = state.focus as Focus;
-
-      
-      // inference
-      let inference = infer(state.term);
-      let freshHoleId = inference.maxHoleId + 1;
-      
-      // fill hole
-      let term;
+      let fillTerm: Term;
       switch (transition.put.case) {
-        case "unit": {
-          term = fillHole(state.term, focus.id, {case: "unit"});
-          break;
-        }
-        case "variable": {
-          term = fillHole(state.term, focus.id, {case: "variable", id: transition.put.id});
-          break;
-        }
-        case "abstraction": {
-          let body: Term = {case: "hole", id: freshHoleId};
-          term = fillHole(state.term, focus.id, {case: "abstraction", id: transition.put.id, domain: transition.put.domain, body});
-          break;
-        }
-        case "application": {
-          let applicant: Term = {case: "hole", id: freshHoleId};
-          let argument:  Term = {case: "hole", id: freshHoleId+1};
-          term = fillHole(state.term, focus.id, {case: "application", applicant, argument});
-          break;
-        }
+        case "unit": fillTerm = {case: "unit"}; break;
+        case "variable": fillTerm = {case: "variable", id: transition.put.id}; break;
+        case "abstraction": fillTerm = {case: "abstraction", body: {case: "hole", id: -1}}; break;
+        case "application": fillTerm = {case: "application", applicant: {case: "hole", id: -1}, argument: {case: "hole", id: -1}}; break;
       }
-      if (term !== undefined) {
-        let inference = infer(term);
-        // new state
-        state.term = term;
-        state.type = inference.type;
-        state.focus = undefined;
-      } else {
-        throw new Error("impossible");
-      }
+      let term: Term = fillHole(state.term, focus.id, fillTerm);
+      term = enumerateHoles(term);
+      let inference: Inference = infer(term);
+      return {
+        term,
+        type: inference.type,
+        focus: undefined,
+      };
     }
   }
-  console.log(`output state: ${stateToString(state)}`);
-  return state;
+
+  throw new Error("unimplemented");
 }
 
-// Holes
-
-function getHoleIds(term: Term): HoleId[] {
-  let holeIds: HoleId[] = [];
-  function go(term: Term): void {
-    switch (term.case) {
-      case "unit": break;
-      case "variable": break;
-      case "abstraction": go(term.body); break;
-      case "application": go(term.applicant); go(term.argument); break;
-      case "hole": holeIds.push(term.id); break;
-    }    
+export function fillHole(term: Term, id:HoleId, termFill: Term): Term {
+  switch (term.case) {
+    case "unit": return term;
+    case "variable": return term;
+    case "abstraction": return {case: "abstraction", body: fillHole(term.body, id, termFill)};
+    case "application": return {case: "application", applicant: fillHole(term.applicant, id, termFill), argument: fillHole(term.argument, id, termFill)};
+    case "hole": {
+      if (term.id === id)
+        return termFill;
+      else 
+        return term;
+    }
   }
-  go(term);
-  return holeIds;
 }
 
-function fillHole(term: Term, id:  HoleId, termFill: Term): Term {
+export function enumerateHoles(term: Term): Term {
+  let freshHoleId = 0;
+  function freshHole(): Term {
+    let term: Term = {case: "hole", id: freshHoleId};
+    freshHoleId++;
+    return term;
+  }
   function go(term: Term): Term {
     switch (term.case) {
       case "unit": return term;
       case "variable": return term;
-      case "abstraction": return { case: "abstraction", id: term.id, domain: term.domain, body: go(term.body) };
-      case "application": return { case: "application", applicant: go(term.applicant), argument: go(term.argument) };
-      case "hole": return termFill;
+      case "abstraction": return {case: "abstraction", body: go(term.body)};
+      case "application": return {case: "application", applicant: go(term.applicant), argument: go(term.argument)};
+      case "hole": return freshHole();
     }
   }
   return go(term);
 }
-

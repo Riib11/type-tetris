@@ -44,7 +44,7 @@ export function items<K, V>(m: LinkedMap<K, V>): [K, V][] {
   return items;
 }
 
-export function filter<K, V>(m: LinkedMap<K, V>, f: (v: V) => boolean): LinkedMap<K, V> {
+export function filterMap<K, V>(m: LinkedMap<K, V>, f: (v: V) => boolean): LinkedMap<K, V> {
   switch (m.case) {
     case "nil":
       return { case: "nil" };
@@ -54,10 +54,32 @@ export function filter<K, V>(m: LinkedMap<K, V>, f: (v: V) => boolean): LinkedMa
           case: "cons",
           key: m.key,
           value: m.value,
-          tail: filter(m.tail, f)
+          tail: filterMap(m.tail, f)
         };
       else 
-        return filter(m.tail, f);
+        return filterMap(m.tail, f);
+    }
+  }
+}
+
+export function concatMaps<K, V>(m1: LinkedMap<K, V>, m2: LinkedMap<K, V>): LinkedMap<K, V> {
+  switch (m1.case) {
+    case "nil": return m2;
+    case "cons": {
+      return concatMaps(m1.tail, {case: "cons", key: m1.key, value: m1.value, tail: m2});
+    }
+  }
+}
+
+export function singleMap<K, V>(key: K, value: V): LinkedMap<K, V> {
+  return {case: "cons", key, value, tail: {case: "nil"}};
+}
+
+export function cloneMap<K, V>(m: LinkedMap<K, V>): LinkedMap<K, V> {
+  switch (m.case) {
+    case "nil": return {case: "nil"};
+    case "cons": {
+      return {case: "cons", key: m.key, value: m.value, tail: cloneMap(m.tail)};
     }
   }
 }

@@ -1,5 +1,6 @@
 import React, { MouseEventHandler } from 'react';
 import './App.css';
+import { toArray } from './data/List';
 import { holeIdToString, Term, termToString, typeToString, variableIdToString } from './language/Syntax';
 import { Put, putToString, State, Transition, transitionToString, update } from './State';
 
@@ -29,7 +30,7 @@ export default class App extends React.Component<AppProperties, State> {
   viewContext(): JSX.Element {
     if (this.state.focus !== undefined) {
       let variableViews: JSX.Element[] = [];
-      this.state.focus.context.forEach((type, id) =>
+      toArray(this.state.focus.context).forEach((type, id) =>
         variableViews.push(
           <div className="context-variable">
             {variableIdToString(id)}: {typeToString(type)}
@@ -48,7 +49,7 @@ export default class App extends React.Component<AppProperties, State> {
     if (this.state.focus !== undefined) {
       return (
         <div className="goal">
-          Goal: {typeToString(this.state.type)}
+          Goal: {typeToString(this.state.focus.type)}
         </div>
       );
     } else
@@ -63,7 +64,7 @@ export default class App extends React.Component<AppProperties, State> {
         case "variable": return <span>{termToString(term)}</span>;
         case "abstraction": {
           let bodyView = go(term.body);
-          return (<span>(({variableIdToString(term.id)}: {typeToString(term.domain)}) ⇒ {bodyView})</span>);
+          return (<span>(λ {bodyView})</span>);
         }
         case "application": {
           let applicantView = go(term.applicant);
@@ -73,7 +74,7 @@ export default class App extends React.Component<AppProperties, State> {
         case "hole": {
           let onClick: MouseEventHandler = e => app.setState(update(app.state, {case: "select", id: term.id}));
           let className = app.state.focus !== undefined && app.state.focus.id === term.id ? "hole focussed" : "hole";
-          return (<span className={className} onClick={onClick}>#{term.id}</span>);
+          return (<span className={className} onClick={onClick}>{holeIdToString(term.id)}</span>);
         }
       }
     }

@@ -1,16 +1,18 @@
 import { concatMaps, LinkedMap, singleMap } from "./data/LinkedMap";
-import { List } from "./data/List";
-import { Term, TermAnn, Type, typeToString, TypeVariableId, typeVariableIdToString, VariableId } from "./language/Syntax";
+import { cloneList, List, toArray } from "./data/List";
+import { HoleId, Term, TermAnn, termAnnToString, Type, typeToString, TypeVariableId, typeVariableIdToString, VariableId } from "./language/Syntax";
 
 export type Context = List<Type>;
 export type Constraints = [Type, Type][];
 export type Substitution = LinkedMap<TypeVariableId, Type>;
 
+export function contextToString(context: Context): string {
+  let res: string = toArray(context).map((type, id) => `${id}: ${typeToString(type)}`).join(", ");
+  return res;
+}
 
 // TODO: During inferece, get the term variable context at hole (which needs to
-//       have unification substititions applied to it).
-
-
+//       have unification substitutions applied to it).
 export function annotate(term: Term): TermAnn {
   let freshTypeVariableId = 0;
   function freshTypeVariable(): Type {
@@ -32,6 +34,9 @@ export function annotate(term: Term): TermAnn {
         let domain: Type = freshTypeVariable();
         let body: TermAnn = go({case: "cons", head: domain, tail: context}, term.body);
         return {case: "abstraction", body, type: {case: "arrow", domain, codomain: extractType(body)}};
+      }
+      case "application": {
+        return {case: "application", applicant: go(context, term.applicant), argument: go(context, term.argument), type: freshTypeVariable()};
       }
       case "hole": {
         let type = freshTypeVariable();
@@ -76,12 +81,76 @@ export function inferVariable(context: Context, id: VariableId): Type {
   }
 }
 
-export function infer(term: Term): Type {
+export type Inference = {
+  termAnn: TermAnn,
+  type: Type,
+  substitution: Substitution,
+  holeContexts: Map<HoleId, Context>;
+}
+
+export function infer(term: Term): Inference {
   let termAnn: TermAnn = annotate(term);
+  console.log(`termAnn: ${termAnnToString(termAnn)}`);
   let constraints: Constraints = collectConstraints(termAnn);
+  console.log(`constraints: ...`)
   let substitution: Substitution = unifyConstraints(constraints);
-  let type = applySubstitution(substitution, extractType(termAnn));
-  return type;
+  console.log(`substitution: ...`)
+  termAnn = applySubstitutionTermAnn(substitution, termAnn);
+  console.log(`substituted termAnn: ${termAnnToString(termAnn)}`);
+  let type = extractType(termAnn);
+  console.log(`extracted type: ${typeToString(type)}`);
+  let holeContexts: Map<HoleId, Context> = collectHoleContexts(termAnn);
+  console.log(`holeContexts: ...`);
+  return {
+    termAnn,
+    type,
+    substitution,
+    holeContexts
+  };
+}
+
+export function applySubstitutionTermAnn(substitution: Substitution, termAnn: TermAnn): TermAnn {
+  switch (termAnn.case) {
+    case "unit": return termAnn;
+    case "variable": return {case: "variable", id: termAnn.id, type: applySubstitution(substitution, termAnn.type)};
+    case "abstraction": return {case: "abstraction", body: applySubstitutionTermAnn(substitution, termAnn.body), type: applySubstitution(substitution, termAnn.type)};
+    case "application": return {case: "application", applicant: applySubstitutionTermAnn(substitution, termAnn.applicant), argument: applySubstitutionTermAnn(substitution, termAnn.argument), type: applySubstitution(substitution, termAnn.type)};
+    case "hole": return {case: "hole", id: termAnn.id, type: applySubstitution(substitution, termAnn.type)};
+  }
+}
+
+export function collectHoleContexts(termAnn: TermAnn): Map<HoleId, Context> {
+  let holeContexts: Map<HoleId, Context> = new Map();
+  function go(context: Context, termAnn: TermAnn): void {
+    console.log(`context: ${contextToString(context)}`);
+    switch (termAnn.case) {
+      case "unit": return;
+      case "variable": return;
+      case "abstraction": {
+        switch (termAnn.type.case) {
+          case "arrow": {
+            console.log(`TEST: ${contextToString({case: "cons", head: termAnn.type.domain, tail: context})}`);
+            go({case: "cons", head: termAnn.type.domain, tail: context}, termAnn.body);
+            return;
+          }
+          default: {
+            throw new Error("impossible");
+          }
+        }
+      }
+      case "application": {
+        go(context, termAnn.applicant);
+        go(context, termAnn.argument);
+        break;
+      }
+      case "hole": {
+        holeContexts.set(termAnn.id, cloneList(context));
+        break;
+      }
+    }
+  }
+  go({case: "nil"}, termAnn);
+  return holeContexts;
 }
 
 export function substitute(id: TypeVariableId, typeNew: Type, type: Type): Type {
@@ -165,7 +234,7 @@ export function unify(type1: Type, type2: Type): Substitution {
             return singleMap(type2.id, type1);
         }
         case "arrow": {
-          concatMaps(
+          return concatMaps(
             unify(type1.domain, type2.domain),
             unify(type1.codomain, type2.codomain));
         }
@@ -173,7 +242,7 @@ export function unify(type1: Type, type2: Type): Substitution {
       break;
     }
   }
-  throw new Error("unimplemented");
+  throw new Error("impossible");
 }
 
 // Checks if `id` occurs in `type`
@@ -193,4 +262,22 @@ export function extractType(term: TermAnn): Type {
     case "application": return term.type;
     case "hole": return term.type;
   }
+}
+
+export function extractHoleType(termAnn: TermAnn, holeId: HoleId): Type {
+  let type: Type | undefined = undefined;
+  function go(termAnn: TermAnn): void {
+    switch (termAnn.case) {
+      case "unit": return;
+      case "variable": return;
+      case "abstraction": go(termAnn.body); return;
+      case "application": go(termAnn.applicant); go(termAnn.argument); return;
+      case "hole": type = termAnn.type;
+    }
+  }
+  go(termAnn);
+  if (type !== undefined)
+    return type;
+  else
+    throw new Error(`hole id ${holeId} not found`);
 }
