@@ -85,27 +85,6 @@ export function collectConstraints(termAnn: TermAnn): Constraints {
   return toArray(constraints);
 }
 
-// export function collectConstraints(term: TermAnn): Constraints {
-//   let constraints: Constraints = [];
-//   function go(term: TermAnn): void {
-//     switch (term.case) {
-//       case "unit": return;
-//       case "variable": return;
-//       case "abstraction": go(term.body); return;
-//       case "application": {
-//         let [f, a] = [extractType(term.applicant), extractType(term.argument)];
-//         constraints.push([f, {case: "arrow", domain: a, codomain: term.type}]);
-//         go(term.applicant);
-//         go(term.argument);
-//         return;
-//       }
-//       case "hole": return;
-//     }
-//   }
-//   go(term);
-//   return constraints;
-// }
-
 export function inferVariable(context: Context, id: VariableId): Type {
   switch (context.case) {
     case "nil": throw new Error("variable id out-of-bounds");
