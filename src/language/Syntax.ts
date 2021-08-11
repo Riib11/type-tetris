@@ -14,7 +14,7 @@ export function typeToString(type: Type): string {
   switch (type.case) {
     case "unit": return "Unit";
     case "variable": return typeVariableIdToString(type.id);
-    case "arrow": return `(${typeToString(type.domain)} -> ${typeToString(type.codomain)})`;
+    case "arrow": return `(${typeToString(type.domain)} → ${typeToString(type.codomain)})`;
   }
 }
 

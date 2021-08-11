@@ -17,14 +17,23 @@ export default class App extends React.Component<AppProperties, State> {
     return (
       <div className="App">
         {this.viewConsole()}
-        <hr />
-        {this.viewGoal()}
-        <hr />
-        {this.viewContext()}
-        <hr />
+        {this.viewEnvironment()}
         {this.viewPalette()}
       </div>
     );
+  }
+
+  viewEnvironment(): JSX.Element {
+    if (this.state.focus !== undefined) {
+      return (
+        <div className="environment">
+          {this.viewContext()}
+          <hr/>
+          {this.viewGoal()}
+        </div>
+      );
+    } else
+      return (<div></div>);
   }
   
   viewContext(): JSX.Element {
@@ -38,7 +47,7 @@ export default class App extends React.Component<AppProperties, State> {
       );
       return (
         <div className="context">
-          Context: {variableViews}
+          {variableViews}
         </div>
       );
     } else
@@ -49,7 +58,7 @@ export default class App extends React.Component<AppProperties, State> {
     if (this.state.focus !== undefined) {
       return (
         <div className="goal">
-          Goal: {typeToString(this.state.focus.type)}
+          {typeToString(this.state.focus.type)}
         </div>
       );
     } else
@@ -96,8 +105,10 @@ export default class App extends React.Component<AppProperties, State> {
           case "put": {
             let onClick: MouseEventHandler = e => app.setState(update(app.state, transition));
             palleteItemViews.push(
-              <div className="palette-item" onClick={onClick}>
-                {putToString(transition.put)}
+              <div>
+                <div className="palette-item" onClick={onClick}>
+                  {putToString(transition.put)}
+                </div>
               </div>
             );
           }
