@@ -1,8 +1,8 @@
 {
   "files": {
     "main.css": "/type-tetris/static/css/main.03eb3849.chunk.css",
-    "main.js": "/type-tetris/static/js/main.3c220a3b.chunk.js",
-    "main.js.map": "/type-tetris/static/js/main.3c220a3b.chunk.js.map",
+    "main.js": "/type-tetris/static/js/main.9bf02bd5.chunk.js",
+    "main.js.map": "/type-tetris/static/js/main.9bf02bd5.chunk.js.map",
     "runtime-main.js": "/type-tetris/static/js/runtime-main.c74bef3a.js",
     "runtime-main.js.map": "/type-tetris/static/js/runtime-main.c74bef3a.js.map",
     "static/js/2.b92fe99d.chunk.js": "/type-tetris/static/js/2.b92fe99d.chunk.js",
@@ -17,6 +17,6 @@
     "static/js/runtime-main.c74bef3a.js",
     "static/js/2.b92fe99d.chunk.js",
     "static/css/main.03eb3849.chunk.css",
-    "static/js/main.3c220a3b.chunk.js"
+    "static/js/main.9bf02bd5.chunk.js"
   ]
 }
