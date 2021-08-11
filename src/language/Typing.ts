@@ -1,6 +1,6 @@
-import { concatMaps, LinkedMap, singleMap } from "./data/LinkedMap";
-import { cloneList, List, toArray } from "./data/List";
-import { HoleId, Term, TermAnn, termAnnToString, Type, typeToString, TypeVariableId, typeVariableIdToString, VariableId } from "./language/Syntax";
+import { concatMaps, items, LinkedMap, mapMap, reverseMap, singleMap } from "../data/LinkedMap";
+import { append, cloneList, List, toArray } from "../data/List";
+import { HoleId, Term, TermAnn, termAnnToString, Type, typeToString, TypeVariableId, typeVariableIdToString, VariableId } from "./Syntax";
 
 export type Context = List<Type>;
 export type Constraints = [Type, Type][];
@@ -9,6 +9,14 @@ export type Substitution = LinkedMap<TypeVariableId, Type>;
 export function contextToString(context: Context): string {
   let res: string = toArray(context).map((type, id) => `${id}: ${typeToString(type)}`).join(", ");
   return res;
+}
+
+export function constraintsToString(constraints: Constraints): string {
+  return constraints.map(item => `${typeToString(item[0])} ~ ${typeToString(item[1])}`).join(", ");
+}
+
+export function substitutionToString(substitution: Substitution): string {
+  return items(substitution).map(item => `${typeVariableIdToString(item[0])} := ${typeToString(item[1])}`).join(", ");
 }
 
 // TODO: During inferece, get the term variable context at hole (which needs to
@@ -48,26 +56,55 @@ export function annotate(term: Term): TermAnn {
   return go({case: "nil"}, term);
 }
 
-export function collectConstraints(term: TermAnn): Constraints {
-  let constraints: Constraints = [];
-  function go(term: TermAnn): void {
-    switch (term.case) {
-      case "unit": return;
-      case "variable": return;
-      case "abstraction": go(term.body); return;
-      case "application": {
-        let [f, a] = [extractType(term.applicant), extractType(term.argument)];
-        constraints.push([f, {case: "arrow", domain: a, codomain: term.type}]);
-        go(term.applicant);
-        go(term.argument);
-        return;
+export function collectConstraints(termAnn: TermAnn): Constraints {
+  let termAnns: List<TermAnn> = {case: "cons", head: termAnn, tail: {case: "nil"}};
+  let constraints: List<[Type, Type]> = {case: "nil"};
+  function go(): void {
+    switch (termAnns.case) {
+      case "nil": return;
+      case "cons": {
+        let termAnn: TermAnn = termAnns.head;
+        switch (termAnn.case) {
+          case "unit": return;
+          case "variable": return;
+          case "abstraction": {
+            termAnns = append(termAnn.body, termAnns);
+            return;
+          }
+          case "application": {
+            let [f, a] = [extractType(termAnn.applicant), extractType(termAnn.argument)];
+            termAnns = append(termAnn.argument, termAnns);
+            termAnns = append(termAnn.applicant, termAnns);
+            constraints = append([f, {case: "arrow", domain: a, codomain: termAnn.type}], constraints);
+          }
+        }
       }
-      case "hole": return;
     }
   }
-  go(term);
-  return constraints;
+  go();
+  return toArray(constraints);
 }
+
+// export function collectConstraints(term: TermAnn): Constraints {
+//   let constraints: Constraints = [];
+//   function go(term: TermAnn): void {
+//     switch (term.case) {
+//       case "unit": return;
+//       case "variable": return;
+//       case "abstraction": go(term.body); return;
+//       case "application": {
+//         let [f, a] = [extractType(term.applicant), extractType(term.argument)];
+//         constraints.push([f, {case: "arrow", domain: a, codomain: term.type}]);
+//         go(term.applicant);
+//         go(term.argument);
+//         return;
+//       }
+//       case "hole": return;
+//     }
+//   }
+//   go(term);
+//   return constraints;
+// }
 
 export function inferVariable(context: Context, id: VariableId): Type {
   switch (context.case) {
@@ -90,17 +127,16 @@ export type Inference = {
 
 export function infer(term: Term): Inference {
   let termAnn: TermAnn = annotate(term);
-  console.log(`termAnn: ${termAnnToString(termAnn)}`);
+  // console.log(`orig termAnn: ${termAnnToString(termAnn)}`);
   let constraints: Constraints = collectConstraints(termAnn);
-  console.log(`constraints: ...`)
+  // console.log(`constraints: ${constraintsToString(constraints)}`);
   let substitution: Substitution = unifyConstraints(constraints);
-  console.log(`substitution: ...`)
+  // console.log(`substitution: ${substitutionToString(substitution)}`);
   termAnn = applySubstitutionTermAnn(substitution, termAnn);
-  console.log(`substituted termAnn: ${termAnnToString(termAnn)}`);
+  termAnn = normalizeTypeVariableIds(termAnn);
+  // console.log(`result termAnn: ${termAnnToString(termAnn)}`);
   let type = extractType(termAnn);
-  console.log(`extracted type: ${typeToString(type)}`);
   let holeContexts: Map<HoleId, Context> = collectHoleContexts(termAnn);
-  console.log(`holeContexts: ...`);
   return {
     termAnn,
     type,
@@ -122,14 +158,12 @@ export function applySubstitutionTermAnn(substitution: Substitution, termAnn: Te
 export function collectHoleContexts(termAnn: TermAnn): Map<HoleId, Context> {
   let holeContexts: Map<HoleId, Context> = new Map();
   function go(context: Context, termAnn: TermAnn): void {
-    console.log(`context: ${contextToString(context)}`);
     switch (termAnn.case) {
       case "unit": return;
       case "variable": return;
       case "abstraction": {
         switch (termAnn.type.case) {
           case "arrow": {
-            console.log(`TEST: ${contextToString({case: "cons", head: termAnn.type.domain, tail: context})}`);
             go({case: "cons", head: termAnn.type.domain, tail: context}, termAnn.body);
             return;
           }
@@ -172,23 +206,23 @@ export function substitute(id: TypeVariableId, typeNew: Type, type: Type): Type 
   }
 }
 
-// TODO: this is a fold-right, perhaps it should be a fold-left? Im not sure
-//       which things I got backwards
 export function applySubstitution(substitution: Substitution, type: Type): Type {
-  switch (substitution.case) {
-    case "nil": return type;
-    case "cons": {
-      return substitute(
-        substitution.key, 
-        substitution.value, 
-        applySubstitution(substitution.tail, type));
+  function go(substitution: Substitution, type: Type): Type {
+    switch (substitution.case) {
+      case "nil": return type;
+      case "cons": {
+        type = applySubstitution(substitution.tail, type);
+        type = substitute(substitution.key, substitution.value, type);
+        return type;
+      }
     }
   }
+  return go(substitution, type);;
 }
 
 export function unifyConstraints(constraints: Constraints): Substitution {
   let substitution: Substitution = {case: "nil"};
-  // TODO: this might be applying or concating backwards?
+  // NOTE: seems like right direction for fold
   constraints.forEach(item => {
     let sub = unify(applySubstitution(substitution, item[0]), applySubstitution(substitution, item[1]));
     substitution = concatMaps(substitution, sub);
@@ -208,7 +242,7 @@ export function unify(type1: Type, type2: Type): Substitution {
     }
     case "variable": {
       switch (type2.case) {
-        case "unit": return {case: "nil"};
+        case "unit": return singleMap(type1.id, type2);
         case "variable": {
           if (type1.id === type2.id)
             return {case: "nil"};
@@ -236,7 +270,7 @@ export function unify(type1: Type, type2: Type): Substitution {
         case "arrow": {
           return concatMaps(
             unify(type1.domain, type2.domain),
-            unify(type1.codomain, type2.codomain));
+            unify(type2.codomain, type1.codomain));
         }
       }
       break;
@@ -272,7 +306,10 @@ export function extractHoleType(termAnn: TermAnn, holeId: HoleId): Type {
       case "variable": return;
       case "abstraction": go(termAnn.body); return;
       case "application": go(termAnn.applicant); go(termAnn.argument); return;
-      case "hole": type = termAnn.type;
+      case "hole": {
+        if (termAnn.id === holeId)
+          type = termAnn.type;
+      }
     }
   }
   go(termAnn);
@@ -281,3 +318,88 @@ export function extractHoleType(termAnn: TermAnn, holeId: HoleId): Type {
   else
     throw new Error(`hole id ${holeId} not found`);
 }
+
+export function normalizeTypeVariableIds(termAnn: TermAnn): TermAnn {
+  let substitutions: Map<TypeVariableId, TypeVariableId> = new Map();
+  let freshTypeVariableId = 0;
+
+  function goTypeVariableId(id: TypeVariableId): TypeVariableId {
+    let idNew = substitutions.get(id);
+    if (idNew !== undefined)
+      return idNew;
+    else {
+      substitutions.set(id, freshTypeVariableId);
+      idNew = freshTypeVariableId;
+      freshTypeVariableId++;
+      return idNew;
+    }
+  }
+  
+  function goType(type: Type): Type {
+    switch (type.case) {
+      case "unit": return {case: "unit"};
+      case "variable": return {case: "variable", id: goTypeVariableId(type.id)};
+      case "arrow": return {case: "arrow", domain: goType(type.domain), codomain: goType(type.codomain)};
+    }
+  }
+
+  function goTermAnn(termAnn: TermAnn): TermAnn {
+    switch (termAnn.case) {
+      case "unit": return {case: "unit"};
+      case "variable": return {case: "variable", id: termAnn.id, type: goType(termAnn.type)};
+      case "abstraction": return {case: "abstraction", body: goTermAnn(termAnn.body), type: goType(termAnn.type)};
+      case "application": return {case: "application", applicant: goTermAnn(termAnn.applicant), argument: goTermAnn(termAnn.argument), type: goType(termAnn.type)};
+      case "hole": return {case: "hole", id: termAnn.id, type: goType(termAnn.type)};
+    }
+  }
+
+  return goTermAnn(termAnn);
+}
+
+// TODO: pretty sure I don't need this anymore
+// export function collectTypeVariableIds(termAnn: TermAnn): TypeVariableId[] {
+//   let ids: TypeVariableId[] = [];
+
+//   function goType(type: Type): void {
+//     switch (type.case) {
+//       case "unit": return;
+//       case "variable": {
+//         ids.push(type.id);
+//         return;
+//       }
+//       case "arrow": {
+//         goType(type.domain);
+//         goType(type.codomain);
+//         return;
+//       }
+//     }
+//   }
+
+//   function goTermAnn(termAnn: TermAnn): void {
+//     switch (termAnn.case) {
+//       case "unit": return;
+//       case "variable": {
+//         goType(termAnn.type);
+//         return;
+//       }
+//       case "abstraction": {
+//         goType(termAnn.type);
+//         goTermAnn(termAnn.body);
+//         return;
+//       }
+//       case "application": {
+//         goType(termAnn.type);
+//         goTermAnn(termAnn.applicant);
+//         goTermAnn(termAnn.argument);
+//         return;
+//       }
+//       case "hole": {
+//         goType(termAnn.type);
+//         return;
+//       }
+//     }
+//   }
+
+//   goTermAnn(termAnn);
+//   return ids;
+// }

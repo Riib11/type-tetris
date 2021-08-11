@@ -32,3 +32,7 @@ export function toArray<A>(l: List<A>): A[] {
   go(l);
   return arr.reverse();
 }
+
+export function append<A>(head: A, tail: List<A>): List<A> {
+  return {case: "cons", head, tail};
+}

@@ -83,3 +83,17 @@ export function cloneMap<K, V>(m: LinkedMap<K, V>): LinkedMap<K, V> {
     }
   }
 }
+
+export function reverseMap<K, V>(m: LinkedMap<K, V>): LinkedMap<K, V> {
+  switch (m.case) {
+    case "nil": return {case: "nil"};
+    case "cons": return concatMaps(reverseMap(m.tail), singleMap(m.key, m.value));
+  }
+}
+
+export function mapMap<K, V>(f: (k: K, v: V) => V, m: LinkedMap<K, V>): LinkedMap<K, V> {
+  switch (m.case) {
+    case "nil": return {case: "nil"};
+    case "cons": return {case: "cons", key: m.key, value: f(m.key, m.value), tail: mapMap(f, m.tail)};
+  }
+}

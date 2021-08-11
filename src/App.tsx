@@ -2,7 +2,7 @@ import React, { MouseEventHandler } from 'react';
 import './App.css';
 import { toArray } from './data/List';
 import { holeIdToString, Term, termToString, typeToString, variableIdToString } from './language/Syntax';
-import { Put, putToString, State, Transition, transitionToString, update } from './State';
+import { putToString, State, update } from './State';
 
 export type AppProperties = {};
 

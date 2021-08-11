@@ -1,6 +1,6 @@
 import { toArray } from "./data/List";
-import { HoleId, holeIdToString, Term, termToString, Type, typeToString, VariableId, variableIdToString } from "./language/Syntax";
-import { collectHoleContexts, Context, contextToString, infer, Inference, extractHoleType } from "./Typing";
+import { HoleId, holeIdToString, Term, termAnnToString, termToString, Type, typeToString, VariableId, variableIdToString } from "./language/Syntax";
+import { collectHoleContexts, Context, contextToString, infer, Inference, extractHoleType } from "./language/Typing";
 
 export type State = {
   term: Term;
@@ -60,10 +60,6 @@ export function putToString(put: Put): string {
 // Update
 
 export function update(state: State, transition: Transition): State {
-  console.log(`update`);
-  console.log(`input state: ${stateToString(state)}`);
-  console.log(`transition: ${transitionToString(transition)}`);
-
   switch (transition.case) {
     case "select": {
       // Infer hole type and context
@@ -73,7 +69,6 @@ export function update(state: State, transition: Transition): State {
       {
         let arr: string[] = [];
         holeContexts.forEach((context, id) => arr.push(`${holeIdToString(id)}: ${contextToString(context)}`));
-        console.log(`holeContexts: ${arr.join("; ")}`);
       }
       let holeContext: Context;
       {
@@ -84,7 +79,6 @@ export function update(state: State, transition: Transition): State {
           throw new Error(`hole id ${transition.id} not found among hole contexts`);
         }
       }
-      console.log(`holeContext: ${contextToString(holeContext)}`);
 
       // Collect transitions
       let transitions: Transition[] = [];
@@ -105,18 +99,13 @@ export function update(state: State, transition: Transition): State {
           case "abstraction": fillTerm = {case: "abstraction", body: {case: "hole", id: -1}}; break;
           case "application": fillTerm = {case: "application", applicant: {case: "hole", id: -1}, argument: {case: "hole", id: -1}}; break;
         }
-        console.log(`trying to fillHole ${termToString(state.term)}`);
         let term: Term = fillHole(state.term, transition.id, fillTerm);
-        console.log(`trying to enumerate ${termToString(term)}`);
         term = enumerateHoles(term);
         try {
-          console.log(`trying to infer ${termToString(term)}`);
           infer(term);
-          console.log(`success for ${termToString(term)}`);
           // if succeeds, then add
           transitions.push({case: "put", put});
         } catch (e) {
-          console.log(`${putToString(put)} is an invalid "put" option because: ${e}`);
           // pass
         }
       });
