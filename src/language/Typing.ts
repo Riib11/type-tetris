@@ -332,53 +332,7 @@ export function normalizeTypeVariableIds(termAnn: TermAnn): TermAnn {
     }
   }
 
+  goType(extractType(termAnn));
+
   return goTermAnn(termAnn);
 }
-
-// TODO: pretty sure I don't need this anymore
-// export function collectTypeVariableIds(termAnn: TermAnn): TypeVariableId[] {
-//   let ids: TypeVariableId[] = [];
-
-//   function goType(type: Type): void {
-//     switch (type.case) {
-//       case "unit": return;
-//       case "variable": {
-//         ids.push(type.id);
-//         return;
-//       }
-//       case "arrow": {
-//         goType(type.domain);
-//         goType(type.codomain);
-//         return;
-//       }
-//     }
-//   }
-
-//   function goTermAnn(termAnn: TermAnn): void {
-//     switch (termAnn.case) {
-//       case "unit": return;
-//       case "variable": {
-//         goType(termAnn.type);
-//         return;
-//       }
-//       case "abstraction": {
-//         goType(termAnn.type);
-//         goTermAnn(termAnn.body);
-//         return;
-//       }
-//       case "application": {
-//         goType(termAnn.type);
-//         goTermAnn(termAnn.applicant);
-//         goTermAnn(termAnn.argument);
-//         return;
-//       }
-//       case "hole": {
-//         goType(termAnn.type);
-//         return;
-//       }
-//     }
-//   }
-
-//   goTermAnn(termAnn);
-//   return ids;
-// }

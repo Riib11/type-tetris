@@ -1,5 +1,5 @@
 import { toArray } from "./data/List";
-import { HoleId, holeIdToString, Term, termAnnToString, termToString, Type, typeToString, VariableId, variableIdToString } from "./language/Syntax";
+import { HoleId, holeIdToString, Term, termToString, Type, typeToString, VariableId, variableIdToString } from "./language/Syntax";
 import { collectHoleContexts, Context, contextToString, infer, Inference, extractHoleType } from "./language/Typing";
 
 export type State = {
