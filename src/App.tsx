@@ -80,6 +80,19 @@ export default class App extends React.Component<AppProperties, State> {
           let argumentView = go(term.argument);
           return (<span>({applicantView} {argumentView})</span>);
         }
+        case "pair": {
+          let part1View = go(term.part1);
+          let part2View = go(term.part2);
+          return (<span>({part1View}, {part2View})</span>);
+        }
+        case "proj1": {
+          let argumentView = go(term.argument);
+          return (<span>(π₁ {argumentView})</span>)
+        }
+        case "proj2": {
+          let argumentView = go(term.argument);
+          return (<span>(π₂ {argumentView})</span>)
+        }
         case "hole": {
           let onClick: MouseEventHandler = e => app.setState(update(app.state, {case: "select", id: term.id}));
           let className = app.state.focus !== undefined && app.state.focus.id === term.id ? "hole focussed" : "hole";
