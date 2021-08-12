@@ -2,7 +2,13 @@ export type LinkedMap<K, V>
   = { case: "nil"; }
   | { case: "cons"; key: K; value: V; tail: LinkedMap<K, V> }
 
-export function lookup<K, V>(m: LinkedMap<K, V>, k: K): V | undefined {
+export function nilMap<K, V>(): LinkedMap<K, V> {
+  return {case: "nil"};
+}
+
+export function lookup<K, V>(m: LinkedMap<K, V>, k: K, eq?: (k1: K, k2: K) => boolean): V | undefined {
+  if (eq === undefined)
+    eq = (k1, k2) => (k1 === k2);
   switch (m.case) {
     case "nil":
       return undefined;
@@ -10,8 +16,12 @@ export function lookup<K, V>(m: LinkedMap<K, V>, k: K): V | undefined {
       if (m.key === k)
         return m.value;
       else
-        return lookup(m.tail, k);
+        return lookup(m.tail, k, eq);
   }
+}
+
+export function appendMap<K, V>(k: K, v: V, m: LinkedMap<K, V>): LinkedMap<K, V> {
+  return {case: "cons", key: k, value: v, tail: m};
 }
 
 export function keys<K, V>(m: LinkedMap<K, V>): K[] {

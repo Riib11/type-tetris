@@ -1,15 +1,15 @@
-import React, { MouseEventHandler } from 'react';
+import React, { ChangeEventHandler, MouseEventHandler } from 'react';
 import './App.css';
-import { toArray } from './data/List';
-import { holeIdToString, Term, termToString, typeToString, variableIdToString } from './language/Syntax';
+import { items } from './data/LinkedMap';
+import { holeNameToString, Term, termToString, typeToString, variableNameToString } from './language/Syntax';
 import { putToString, State, update } from './State';
 
 export type AppProperties = {};
 
 export default class App extends React.Component<AppProperties, State> {
   state: State = {
-    term: {case: "hole", id: 0},
-    type: {case: "variable", id: 0},
+    term: {case: "hole", name: {id: 0}},
+    type: {case: "variable", name: {id: 0}},
     focus: undefined
   };
 
@@ -39,10 +39,10 @@ export default class App extends React.Component<AppProperties, State> {
   viewContext(): JSX.Element {
     if (this.state.focus !== undefined) {
       let variableViews: JSX.Element[] = [];
-      toArray(this.state.focus.context).forEach((type, id) =>
+      items(this.state.focus.context).forEach(item =>
         variableViews.push(
           <div className="context-variable">
-            {variableIdToString(id)}: {typeToString(type)}
+            {variableNameToString(item[0])}: {typeToString(item[1])}
           </div>)
       );
       return (
@@ -69,11 +69,18 @@ export default class App extends React.Component<AppProperties, State> {
     let app = this;
     function go(term: Term): JSX.Element {
       switch (term.case) {
-        case "unit": return <span>{termToString(term)}</span>;
-        case "variable": return <span>{termToString(term)}</span>;
+        case "unit": return (<span>{termToString(term)}</span>);
+        case "variable": return (<span>{termToString(term)}</span>);
         case "abstraction": {
           let bodyView = go(term.body);
-          return (<span>(λ {bodyView})</span>);
+          let onChange: ChangeEventHandler<HTMLInputElement> = e => {
+            let elem = e.target;
+            elem.style.width = `${(elem.value.length + 1) * 8}px`;
+            app.setState(update(app.state, {case: "relabel", name: term.name, label: elem.value}));
+          };
+          let varValue = variableNameToString(term.name);
+          let varView = (<input className="variable" type="text" value={varValue} onChange={onChange} style={{width: `${(varValue.length + 1) * 8}px`}}></input>);
+          return (<span>(λ {varView} . {bodyView})</span>);
         }
         case "application": {
           let applicantView = go(term.applicant);
@@ -81,8 +88,8 @@ export default class App extends React.Component<AppProperties, State> {
           return (<span>({applicantView} {argumentView})</span>);
         }
         case "pair": {
-          let part1View = go(term.part1);
-          let part2View = go(term.part2);
+          let part1View = go(term.proj1);
+          let part2View = go(term.proj2);
           return (<span>({part1View}, {part2View})</span>);
         }
         case "proj1": {
@@ -94,9 +101,9 @@ export default class App extends React.Component<AppProperties, State> {
           return (<span>(π₂ {argumentView})</span>)
         }
         case "hole": {
-          let onClick: MouseEventHandler = e => app.setState(update(app.state, {case: "select", id: term.id}));
-          let className = app.state.focus !== undefined && app.state.focus.id === term.id ? "hole focussed" : "hole";
-          return (<span className={className} onClick={onClick}>{holeIdToString(term.id)}</span>);
+          let onClick: MouseEventHandler = e => app.setState(update(app.state, {case: "select", name: term.name}));
+          let className = app.state.focus !== undefined && app.state.focus.name === term.name ? "hole focussed" : "hole";
+          return (<span className={className} onClick={onClick}>{holeNameToString(term.name)}</span>);
         }
       }
     }
