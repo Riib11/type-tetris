@@ -41,9 +41,9 @@ export function infer(term: Term): Inference {
   console.log("------------------------------------------------------");
   let termAnn: TermAnn = annotate(term);
   console.log(`orig termAnn: ${termAnnToString(termAnn)}`);
-  let constraints: Constraints = calculateConstraints(termAnn);
+  let constraints = calculateConstraints(termAnn);
   console.log(`constraints: ${constraintsToString(constraints)}`);
-  let substitution: Substitution = unifyConstraints(constraints);
+  let substitution = unifyConstraints(constraints);
   console.log(`substitution: ${substitutionToString(substitution)}`);
   termAnn = applySubstitutionTermAnn(substitution, termAnn);
   enumerateTypeVariableNames(termAnn);
@@ -77,6 +77,7 @@ export function annotate(term: Term): TermAnn {
       case "pair": return {case: "pair", proj1: go(context, term.proj1), proj2: go(context, term.proj2), type: makePlaceholderTypeVariable()};
       case "proj1": return {case: "proj1", argument: go(context, term.argument), type: makePlaceholderTypeVariable(), part2: makePlaceholderTypeVariable()};
       case "proj2": return {case: "proj2", argument: go(context, term.argument), type: makePlaceholderTypeVariable(), part1: makePlaceholderTypeVariable()};
+      case "let": return go(context, {case: "application", applicant: {case: "abstraction", name: term.name, body: term.body}, argument: go(context, term.value)});
       case "hole": return {case: "hole", name: term.name, type: makePlaceholderTypeVariable()};
     };
   }

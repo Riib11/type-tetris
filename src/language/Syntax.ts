@@ -45,6 +45,7 @@ export type Term
   | { case: "pair"; proj1: Term; proj2: Term; }
   | { case: "proj1"; argument: Term; }
   | { case: "proj2"; argument: Term; }
+  | { case: "let"; name: VariableName; value: Term; body: Term; }
   | { case: "hole"; name: HoleName }
 ;
 
@@ -57,6 +58,7 @@ export function termToString(term: Term): string {
     case "pair": return `(${termToString(term.proj1)}, ${termToString(term.proj2)})`;
     case "proj1": return `(π₁ ${termToString(term.argument)})`;
     case "proj2": return `(π₂ ${termToString(term.argument)})`;
+    case "let": return `(let ${variableNameToString(term.name)} = ${termToString(term.value)} in ${termToString(term.body)})`;
     case "hole": return holeNameToString(term.name);
   }
 }
@@ -172,11 +174,12 @@ export function collectHoleNames(term: Term): HoleName[] {
       case "pair": go(term.proj1); go(term.proj2); return;
       case "proj1": go(term.argument); return;
       case "proj2": go(term.argument); return;
+      case "let": go(term.value); go(term.body); return;
       case "hole": { holeNames.push(term.name); return; }
     }
   }
   go(term);
-  return holeNames.reverse();
+  return holeNames;
 }
 
 // Fresh names
@@ -262,6 +265,7 @@ export function relabel(name: VariableName, label: VariableLabel, term: Term): v
       case "pair": go(term.proj1); go(term.proj2); return;
       case "proj1": go(term.argument); return;
       case "proj2": go(term.argument); return;
+      case "let": if (name === term.name) {term.name.label = label}; go(term.value); go(term.body); return;
       case "hole": return;
     }
   }

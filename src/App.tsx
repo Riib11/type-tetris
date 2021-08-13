@@ -100,6 +100,18 @@ export default class App extends React.Component<AppProperties, State> {
           let argumentView = go(term.argument);
           return (<span>(π₂ {argumentView})</span>)
         }
+        case "let": {
+          let onChange: ChangeEventHandler<HTMLInputElement> = e => {
+            let elem = e.target;
+            elem.style.width = `${(elem.value.length + 1) * 8}px`;
+            app.setState(update(app.state, {case: "relabel", name: term.name, label: elem.value}));
+          };
+          let varValue = variableNameToString(term.name);
+          let varView = (<input className="variable" type="text" value={varValue} onChange={onChange} style={{width: `${(varValue.length + 1) * 8}px`}}></input>);
+          let valueView = go(term.value);
+          let bodyView = go(term.body);
+          return (<span>let {varView} = {valueView} in {bodyView}</span>);
+        }
         case "hole": {
           let onClick: MouseEventHandler = e => app.setState(update(app.state, {case: "select", name: term.name}));
           let className = app.state.focus !== undefined && app.state.focus.name === term.name ? "hole focussed" : "hole";

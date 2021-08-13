@@ -29,6 +29,8 @@ export type Put
   | { case: "pair" }
   | { case: "proj1" }
   | { case: "proj2" }
+  | { case: "let" }
+;
 
 export function stateToString(state: State): string {
   return `term: ${termToString(state.term)}; type: ${typeToString(state.type)}; focus: ${focusToString(state.focus)}`;
@@ -53,11 +55,12 @@ export function putToString(put: Put): string {
   switch (put.case) {
     case "unit": return `unit`;
     case "variable": return variableNameToString(put.name);
-    case "abstraction": return `λ ?`;
+    case "abstraction": return `λ ? . ?`;
     case "application": return `? ?`;
     case "pair": return `(? , ?)`
     case "proj1": return `π₁ ?`
     case "proj2": return `π₂ ?`
+    case "let": return `let ? = ? in ?`;
   }
 }
 
@@ -80,6 +83,7 @@ export function update(state: State, transition: Transition): State {
       putOptions.push({case: "pair"});
       putOptions.push({case: "proj1"});
       putOptions.push({case: "proj2"});
+      putOptions.push({case: "let"});
       // Variable constructors
       items(holeContext).forEach(item =>  putOptions.push({case: "variable", name: item[0]}));
       // Filter valid putOptions
@@ -142,6 +146,7 @@ export function generateFillTerm(put: Put): Term {
     case "pair": return {case: "pair", proj1: makePlaceholderHole(), proj2: makePlaceholderHole()};
     case "proj1": return {case: "proj1", argument: makePlaceholderHole()};
     case "proj2": return {case: "proj2", argument: makePlaceholderHole()};
+    case "let": return {case: "let", name: makePlaceholderVariableName(), value: makePlaceholderHole(), body: makePlaceholderHole()};
   }
 }
 
@@ -154,6 +159,7 @@ export function fillHole(term: Term, name:HoleName, termFill: Term): Term {
     case "pair": return {case: "pair", proj1: fillHole(term.proj1, name, termFill), proj2: fillHole(term.proj2, name, termFill)};
     case "proj1": return {case: "proj1", argument: fillHole(term.argument, name, termFill)};
     case "proj2": return {case: "proj2", argument: fillHole(term.argument, name, termFill)};
+    case "let": return {case: "let", name: term.name, value: fillHole(term.value, name, termFill), body: fillHole(term.body, name, termFill)};
     case "hole": return term.name === name ? termFill : term;
   }
 }
